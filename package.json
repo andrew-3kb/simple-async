@@ -1,8 +1,10 @@
 {
   "name": "simple-concurrency",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "main": "src/index.js",
   "license": "MIT",
+  "homepage": "https://github.com/andrew-3kb/simple-concurrency",
+  "repository": "andrew-3kb/simple-concurrency",
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
