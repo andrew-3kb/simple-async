@@ -4,7 +4,9 @@
   "main": "src/index.js",
   "license": "MIT",
   "homepage": "https://github.com/andrew-3kb/simple-concurrency",
-  "repository": "andrew-3kb/simple-concurrency",
+  "repository": {
+    "url": "git+https://github.com/andrew-3kb/simple-concurrency.git"
+  },
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
