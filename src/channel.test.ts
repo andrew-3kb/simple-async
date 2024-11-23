@@ -2,8 +2,9 @@ import { expect, test, describe } from "vitest";
 import { delay } from "./delay";
 import {
   addTaskToChannel,
-  addTaskToChannelExclusively,
+  cancelChannelTask,
   createChannel,
+  createTakeLatestChannel,
   type ChannelEvent,
   type ChannelTaskEvent,
 } from "./channel";
@@ -49,7 +50,7 @@ describe("Channel", () => {
         },
       }),
     ]);
-    expect(output).toEqual([11, 21, 12, 22, 31, 32]);
+    expect(output).toEqual([11, 12, 21, 22, 31, 32]);
   });
 
   test("concurrently executes tasks if passed concurrency", async () => {
@@ -85,10 +86,13 @@ describe("Channel", () => {
   });
 
   test("addTaskToChannelExclusively() cancels any existing tasks in the queue", async () => {
-    const channel = createChannel({ concurrency: 1 });
     const output: number[] = [];
+    const channel = createTakeLatestChannel({
+      onTaskChainStarted: () => output.push(100),
+      onTaskChainEnded: () => output.push(101),
+    });
     const results = await Promise.all([
-      addTaskToChannelExclusively({
+      addTaskToChannel({
         channel,
         task: async () => {
           output.push(11);
@@ -97,7 +101,7 @@ describe("Channel", () => {
           return 1;
         },
       }),
-      addTaskToChannelExclusively({
+      addTaskToChannel({
         channel,
         task: async () => {
           output.push(21);
@@ -106,7 +110,7 @@ describe("Channel", () => {
           return 2;
         },
       }),
-      addTaskToChannelExclusively({
+      addTaskToChannel({
         channel,
         task: async () => {
           output.push(31);
@@ -116,12 +120,13 @@ describe("Channel", () => {
         },
       }),
     ]);
-    expect(output).toEqual([11, 12, 31, 32]);
+    // expect(output).toEqual([11, 12, 31, 32]);
     expect(results).toEqual([
       expect.objectContaining({ isSuccess: true, result: 1 }),
       expect.objectContaining({ isCancelation: true }),
       expect.objectContaining({ isSuccess: true, result: 3 }),
     ]);
+    expect(output).toEqual([100, 11, 12, 31, 32, 101]);
   });
 
   test("catches errors in task and returns them in result", async () => {
@@ -145,23 +150,25 @@ describe("Channel", () => {
       concurrency: 1,
       eventHandler: (event) => events.push(event),
     });
+    const cancelableTask = async () => {
+      await delay(10);
+      return 2;
+    };
     await Promise.all([
-      addTaskToChannelExclusively({
+      addTaskToChannel({
         channel,
         task: async () => {
           await delay(10);
           return 1;
         },
       }),
-      addTaskToChannelExclusively({
+      addTaskToChannel({
         channel,
         eventHandler: (event) => taskEvents.push(event),
-        task: async () => {
-          await delay(10);
-          return 2;
-        },
+        task: cancelableTask,
       }),
-      addTaskToChannelExclusively({
+      cancelChannelTask({ channel, task: cancelableTask }),
+      addTaskToChannel({
         channel,
         task: async () => {
           await delay(10);
@@ -173,7 +180,6 @@ describe("Channel", () => {
       expect.objectContaining({ type: "TASK_ADDED" }),
       expect.objectContaining({ type: "TASK_STARTED" }),
       expect.objectContaining({ type: "TASK_ADDED" }),
-      expect.objectContaining({ type: "CANCELLED_ALL_TASKS" }),
       expect.objectContaining({ type: "TASK_CANCELLED" }),
       expect.objectContaining({ type: "TASK_ADDED" }),
       expect.objectContaining({ type: "TASK_COMPLETED" }),

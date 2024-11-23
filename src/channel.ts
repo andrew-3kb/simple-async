@@ -315,32 +315,74 @@ const proccessChannel = (channel: Channel) => {
   return;
 };
 
-export const addTaskToChannelExclusively = <T>(options: {
-  channel: Channel;
-  task: () => T;
-  priority?: number;
-  eventHandler?: (event: ChannelTaskEvent) => void;
-}): Promise<ChannelTaskResult<Awaited<T>>> => {
-  if (options.channel.tasksInQueue.length) {
-    cancelAllChannelTasks(options.channel);
-  }
-  return addTaskToChannel(options);
+export const createTakeLatestChannel = (options?: {
+  onTaskChainStarted?: () => void;
+  onTaskChainEnded?: () => void;
+  eventHandler?: (event: ChannelEvent) => void;
+}) => {
+  return createChannel({
+    concurrency: 1,
+    eventHandler: (event) => {
+      if (event.type === "TASK_ADDED") {
+        if (
+          options?.onTaskChainStarted &&
+          event.channel.tasksInProgress.length === 0
+        ) {
+          options.onTaskChainStarted();
+        }
+
+        if (event.channel.tasksInQueue.length) {
+          for (const task of event.channel.tasksInQueue) {
+            if (task !== event.task) {
+              cancelChannelTask({ channel: event.channel, task: task.task });
+            }
+          }
+        }
+      }
+
+      if (
+        event.type === "TASK_COMPLETED" &&
+        options?.onTaskChainEnded &&
+        event.channel.tasksInQueue.length === 0
+      ) {
+        options.onTaskChainEnded();
+      }
+
+      options?.eventHandler?.(event);
+    },
+  });
 };
 
-export const addTaskToChannelIfEmpty = <T>(options: {
-  channel: Channel;
-  task: () => T;
-  priority?: number;
-  eventHandler?: (event: ChannelTaskEvent) => void;
-}): Promise<ChannelTaskResult<Awaited<T>>> => {
-  if (options.channel.tasksInQueue.length) {
-    return Promise.resolve({
-      isCancelation: true,
-      isSuccess: false,
-      isError: false,
-      result: undefined,
-      error: undefined,
-    });
-  }
-  return addTaskToChannel(options);
+export const createTakeFirstChannel = (options?: {
+  onTaskChainStarted?: () => void;
+  onTaskChainEnded?: () => void;
+  eventHandler?: (event: ChannelEvent) => void;
+}) => {
+  return createChannel({
+    concurrency: 1,
+    eventHandler: (event) => {
+      if (event.type === "TASK_ADDED") {
+        if (
+          options?.onTaskChainStarted &&
+          event.channel.tasksInProgress.length === 0
+        ) {
+          options.onTaskChainStarted();
+        }
+
+        if (event.channel.tasksInQueue.length) {
+          cancelChannelTask({ channel: event.channel, task: event.task.task });
+        }
+      }
+
+      if (
+        event.type === "TASK_COMPLETED" &&
+        options?.onTaskChainEnded &&
+        event.channel.tasksInQueue.length === 0
+      ) {
+        options.onTaskChainEnded();
+      }
+
+      options?.eventHandler?.(event);
+    },
+  });
 };
